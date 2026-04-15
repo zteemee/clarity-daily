@@ -7,7 +7,7 @@ const load = (key, fallback) => {
 };
 const save = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} };
 
-// ─── Defaults ──────────────────────────────A───────────────────────────────────
+// ─── Defaults ─────────────────────────────────────────────────────────────────
 const DEFAULT_HABITS = [
   { id: 1, name: "Morning workout", emoji: "🏋️", points: 20 },
   { id: 2, name: "Deep work block", emoji: "🎯", points: 18 },
@@ -28,43 +28,225 @@ const MOODS = [
   { emoji: "😣", label: "Hard", color: "#fca5a5", bg: "#fef2f2" },
 ];
 
-const SCORE_COLOR = (pts) => {
-  if (pts >= 100) return "#f9c846";
-  if (pts >= 70) return "#86efac";
-  if (pts >= 40) return "#93c5fd";
-  if (pts > 0)  return "#c4b5fd";
-  return "#e5e7eb";
-};
-
-const SCORE_OPACITY = (pts) => {
-  if (pts >= 100) return 1;
-  if (pts >= 70) return 0.85;
-  if (pts >= 40) return 0.65;
-  if (pts > 0) return 0.45;
-  return 0.15;
-};
-
 const todayKey = (d) => d.toISOString().slice(0, 10);
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
+// ─── Login Screen ──────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [name, setName] = useState("");
+  const [pin, setPin] = useState("");
+  const [mode, setMode] = useState("login"); // login | register
+  const [error, setError] = useState("");
+  const [shake, setShake] = useState(false);
+
+  const triggerShake = () => {
+    setShake(true);
+    setTimeout(() => setShake(false), 500);
+  };
+
+  const handleSubmit = () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) { setError("Please enter your name."); triggerShake(); return; }
+    if (pin.length < 4) { setError("PIN must be 4 digits."); triggerShake(); return; }
+
+    const users = load("cd_users", {});
+
+    if (mode === "register") {
+      if (users[trimmedName]) {
+        setError("This name is already taken. Try logging in.");
+        triggerShake();
+        return;
+      }
+      users[trimmedName] = { pin };
+      save("cd_users", users);
+      onLogin(trimmedName);
+    } else {
+      if (!users[trimmedName]) {
+        setError("Name not found. Register first.");
+        triggerShake();
+        return;
+      }
+      if (users[trimmedName].pin !== pin) {
+        setError("Wrong PIN. Try again.");
+        triggerShake();
+        setPin("");
+        return;
+      }
+      onLogin(trimmedName);
+    }
+  };
+
+  const handlePinInput = (val) => {
+    if (/^\d{0,4}$/.test(val)) setPin(val);
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(160deg, #fdf8f0 0%, #fef3dc 50%, #fdf0e0 100%)",
+      fontFamily: "'Georgia', serif",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "20px"
+    }}>
+      <style>{`
+        @keyframes fadeIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-8px)} 40%,80%{transform:translateX(8px)} }
+        @keyframes leafFloat { 0%,100%{transform:translateY(0) rotate(-8deg)} 50%{transform:translateY(-10px) rotate(8deg)} }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        input:focus { outline: none; }
+      `}</style>
+
+      <div style={{
+        width: "100%", maxWidth: 360,
+        animation: "fadeIn 0.5s ease"
+      }}>
+        {/* Logo / header */}
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{
+            fontSize: 48, marginBottom: 12,
+            display: "inline-block",
+            animation: "leafFloat 3s ease-in-out infinite"
+          }}>🌿</div>
+          <div style={{ fontSize: 26, color: "#3d2c1e", letterSpacing: 1 }}>Clarity Daily</div>
+          <div style={{ fontSize: 13, color: "#c8a060", marginTop: 4, letterSpacing: 2, textTransform: "uppercase" }}>
+            Your daily garden
+          </div>
+        </div>
+
+        {/* Card */}
+        <div style={{
+          background: "#fff",
+          borderRadius: 24,
+          padding: "28px 24px 24px",
+          border: "2px solid #f0e8d8",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+          animation: shake ? "shake 0.4s ease" : "none"
+        }}>
+          {/* Tab switcher */}
+          <div style={{
+            display: "flex", background: "#fdf8f0", borderRadius: 14,
+            padding: 4, marginBottom: 24
+          }}>
+            {["login", "register"].map(m => (
+              <button key={m} onClick={() => { setMode(m); setError(""); setPin(""); }} style={{
+                flex: 1, padding: "9px 0", borderRadius: 11, border: "none",
+                background: mode === m ? "#fff" : "transparent",
+                color: mode === m ? "#3d2c1e" : "#c8a060",
+                fontFamily: "'Georgia', serif", fontSize: 14,
+                cursor: "pointer",
+                boxShadow: mode === m ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+                transition: "all 0.2s ease",
+                fontWeight: mode === m ? "bold" : "normal"
+              }}>
+                {m === "login" ? "Sign in" : "Register"}
+              </button>
+            ))}
+          </div>
+
+          {/* Name field */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: "#c8a060", letterSpacing: 2, textTransform: "uppercase", marginBottom: 7 }}>
+              Your name
+            </div>
+            <input
+              value={name}
+              onChange={e => { setName(e.target.value); setError(""); }}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
+              placeholder="e.g. Timi"
+              style={{
+                width: "100%", border: "2px solid #f0e8d8", borderRadius: 12,
+                padding: "12px 14px", fontFamily: "'Georgia', serif",
+                fontSize: 15, color: "#3d2c1e", background: "#fdf8f0"
+              }}
+            />
+          </div>
+
+          {/* PIN field */}
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ fontSize: 11, color: "#c8a060", letterSpacing: 2, textTransform: "uppercase", marginBottom: 7 }}>
+              4-digit PIN
+            </div>
+            {/* PIN dots UI */}
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 14 }}>
+              {[0,1,2,3].map(i => (
+                <div key={i} style={{
+                  width: 16, height: 16, borderRadius: "50%",
+                  background: pin.length > i ? "#f9c846" : "transparent",
+                  border: "2px solid",
+                  borderColor: pin.length > i ? "#f9c846" : "#e0d5c5",
+                  transition: "all 0.15s ease",
+                  boxShadow: pin.length > i ? "0 0 8px rgba(249,200,70,0.5)" : "none"
+                }} />
+              ))}
+            </div>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              value={pin}
+              onChange={e => { handlePinInput(e.target.value); setError(""); }}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
+              placeholder="••••"
+              style={{
+                width: "100%", border: "2px solid #f0e8d8", borderRadius: 12,
+                padding: "12px 14px", fontFamily: "'Georgia', serif",
+                fontSize: 20, color: "#3d2c1e", background: "#fdf8f0",
+                textAlign: "center", letterSpacing: 8
+              }}
+            />
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div style={{
+              background: "#fef2f2", border: "2px solid #fca5a5",
+              borderRadius: 10, padding: "9px 12px",
+              fontSize: 13, color: "#dc2626", marginBottom: 16,
+              fontFamily: "'Georgia', serif"
+            }}>
+              {error}
+            </div>
+          )}
+
+          {/* Submit button */}
+          <button onClick={handleSubmit} style={{
+            width: "100%", padding: "15px",
+            borderRadius: 16, border: "none",
+            background: "linear-gradient(135deg, #f9c846, #e08000)",
+            color: "#fff", fontFamily: "'Georgia', serif",
+            fontSize: 16, cursor: "pointer",
+            boxShadow: "0 4px 16px rgba(249,200,70,0.4)",
+            transition: "transform 0.15s ease",
+          }}
+            onMouseDown={e => e.currentTarget.style.transform = "scale(0.97)"}
+            onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+          >
+            {mode === "login" ? "Enter my garden 🌱" : "Create my garden 🌿"}
+          </button>
+        </div>
+
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#c8a060" }}>
+          Stored locally on this device only
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Garden Component ──────────────────────────────────────────────────────────
 function Garden({ score, mood }) {
-  const moodColor = mood ? MOODS.find(m => m.label === mood)?.color : "#86efac";
   const vitality = score / 100;
 
   const plants = [
-    // Trees (background layer)
     { x: 8,  y: 62, type: "tree",    scale: 0.85, emoji: "🌳" },
     { x: 78, y: 60, type: "tree",    scale: 0.9,  emoji: "🌳" },
     { x: 92, y: 65, type: "tree",    scale: 0.7,  emoji: "🌲" },
-    // Mid flowers & bushes
     { x: 22, y: 70, type: "flower",  scale: 1.0,  emoji: score >= 50 ? "🌸" : "🌱" },
     { x: 38, y: 68, type: "flower",  scale: 0.9,  emoji: score >= 60 ? "🌺" : "🌱" },
     { x: 55, y: 66, type: "flower",  scale: 1.1,  emoji: score >= 40 ? "🌻" : "🌱" },
     { x: 68, y: 70, type: "flower",  scale: 0.95, emoji: score >= 55 ? "🌸" : "🌱" },
     { x: 84, y: 68, type: "flower",  scale: 0.85, emoji: score >= 45 ? "🌼" : "🌱" },
-    // Ground flowers (front row — denser)
     { x: 5,  y: 80, type: "flower",  scale: 0.7,  emoji: score >= 30 ? "🌼" : "🌿" },
     { x: 14, y: 82, type: "flower",  scale: 0.75, emoji: score >= 35 ? "🌸" : "🌿" },
     { x: 26, y: 80, type: "flower",  scale: 0.8,  emoji: score >= 40 ? "🌺" : "🌿" },
@@ -75,11 +257,9 @@ function Garden({ score, mood }) {
     { x: 76, y: 83, type: "flower",  scale: 0.65, emoji: score >= 35 ? "🌼" : "🌿" },
     { x: 85, y: 81, type: "flower",  scale: 0.75, emoji: score >= 50 ? "🌸" : "🌿" },
     { x: 94, y: 80, type: "flower",  scale: 0.7,  emoji: score >= 40 ? "🌼" : "🌿" },
-    // Grasses & accents
     { x: 30, y: 75, type: "grass",   scale: 0.9,  emoji: "🌿" },
     { x: 50, y: 76, type: "grass",   scale: 0.8,  emoji: "🍀" },
     { x: 72, y: 74, type: "grass",   scale: 0.85, emoji: "🌿" },
-    // Butterfly on high score
     ...(score >= 80 ? [{ x: 42, y: 55, type: "extra", scale: 0.9, emoji: "🦋" }] : []),
     ...(score >= 100 ? [{ x: 62, y: 50, type: "extra", scale: 0.85, emoji: "🦋" }] : []),
   ];
@@ -95,7 +275,6 @@ function Garden({ score, mood }) {
       border: "2px solid #f0e8d8",
       boxShadow: "0 4px 24px rgba(0,0,0,0.07)"
     }}>
-      {/* Sun or mist */}
       {score >= 40 ? (
         <div style={{
           position: "absolute", top: 18, right: 24,
@@ -112,16 +291,12 @@ function Garden({ score, mood }) {
           backdropFilter: "blur(1px)"
         }} />
       )}
-
-      {/* Ground */}
       <div style={{
         position: "absolute", bottom: 0, left: 0, right: 0, height: 48,
         background: `linear-gradient(180deg, #bbf7d0 0%, #86efac 100%)`,
         opacity: 0.5 + vitality * 0.5,
         borderRadius: "0 0 22px 22px"
       }} />
-
-      {/* Plants */}
       {plants.map((p, i) => (
         <div key={i} style={{
           position: "absolute",
@@ -138,8 +313,6 @@ function Garden({ score, mood }) {
           {p.emoji}
         </div>
       ))}
-
-      {/* Score badge */}
       <div style={{
         position: "absolute", top: 14, left: 16,
         background: "rgba(255,255,255,0.85)",
@@ -150,8 +323,6 @@ function Garden({ score, mood }) {
       }}>
         {score}<span style={{ fontSize: 10, color: "#b09070" }}>/100</span>
       </div>
-
-      {/* Glowing effect on 100 */}
       {score >= 100 && (
         <div style={{
           position: "absolute", inset: 0, borderRadius: 22,
@@ -167,15 +338,12 @@ function Garden({ score, mood }) {
 function CalendarView({ dayData, onClose }) {
   const today = new Date();
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
-
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7; // Mon=0
-
+  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
   const prev = () => setViewDate(new Date(year, month - 1, 1));
   const next = () => setViewDate(new Date(year, month + 1, 1));
-
   const cells = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
@@ -193,23 +361,16 @@ function CalendarView({ dayData, onClose }) {
         padding: "28px 20px 40px",
         boxShadow: "0 -8px 40px rgba(0,0,0,0.15)"
       }}>
-        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <button onClick={prev} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#b09070" }}>‹</button>
-          <div style={{ fontFamily: "'Georgia', serif", fontSize: 18, color: "#3d2c1e" }}>
-            {MONTHS[month]} {year}
-          </div>
+          <div style={{ fontFamily: "'Georgia', serif", fontSize: 18, color: "#3d2c1e" }}>{MONTHS[month]} {year}</div>
           <button onClick={next} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#b09070" }}>›</button>
         </div>
-
-        {/* Day labels */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 8 }}>
           {DAYS.map(d => (
             <div key={d} style={{ textAlign: "center", fontSize: 10, color: "#c8a060", letterSpacing: 1, paddingBottom: 4 }}>{d}</div>
           ))}
         </div>
-
-        {/* Calendar grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
           {cells.map((day, i) => {
             if (!day) return <div key={`e${i}`} />;
@@ -222,29 +383,17 @@ function CalendarView({ dayData, onClose }) {
             const moodColor = moodData?.color || null;
             const isToday = key === todayKey(today);
             const hasData = pts > 0 || mood;
-
-            // Cell color = mood color if set, otherwise soft neutral
-            const cellBg = moodColor
-              ? moodColor
-              : hasData ? "#d1c4b0" : "#f5ede0";
-            const cellOpacity = moodColor
-              ? 0.75 + (pts / 100) * 0.25   // brighter with more points
-              : hasData ? 0.4 : 0.25;
-
+            const cellBg = moodColor ? moodColor : hasData ? "#d1c4b0" : "#f5ede0";
+            const cellOpacity = moodColor ? 0.75 + (pts / 100) * 0.25 : hasData ? 0.4 : 0.25;
             return (
               <div key={key} style={{
-                aspectRatio: "1",
-                borderRadius: 10,
-                background: cellBg,
-                opacity: cellOpacity,
+                aspectRatio: "1", borderRadius: 10,
+                background: cellBg, opacity: cellOpacity,
                 display: "flex", flexDirection: "column",
                 alignItems: "center", justifyContent: "center",
                 border: isToday ? "2px solid #3d2c1e" : "2px solid transparent",
                 fontFamily: "'Georgia', serif",
-                position: "relative",
-                cursor: "default",
                 boxShadow: moodColor ? `0 2px 8px ${moodColor}55` : "none",
-                transition: "all 0.2s ease"
               }}>
                 <div style={{ fontSize: 9, color: "#3d2c1e", opacity: 0.7 }}>{day}</div>
                 {moodEmoji && <div style={{ fontSize: 12 }}>{moodEmoji}</div>}
@@ -253,8 +402,6 @@ function CalendarView({ dayData, onClose }) {
             );
           })}
         </div>
-
-        {/* Legend — mood based */}
         <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "center", flexWrap: "wrap" }}>
           {MOODS.map(m => (
             <div key={m.label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#b09070" }}>
@@ -263,7 +410,6 @@ function CalendarView({ dayData, onClose }) {
             </div>
           ))}
         </div>
-
         <button onClick={onClose} style={{
           display: "block", width: "100%", marginTop: 20,
           padding: "14px", borderRadius: 16, border: "none",
@@ -279,21 +425,14 @@ function CalendarView({ dayData, onClose }) {
 function SettingsView({ habits, setHabits, onClose }) {
   const [local, setLocal] = useState(habits.map(h => ({ ...h })));
   const total = local.reduce((s, h) => s + Number(h.points), 0);
-
   const update = (id, field, val) =>
     setLocal(l => l.map(h => h.id === id ? { ...h, [field]: val } : h));
-
   const addHabit = () => {
     if (local.length >= 10) return;
     setLocal(l => [...l, { id: Date.now(), name: "", emoji: "⭐", points: 5 }]);
   };
-
   const removeHabit = (id) => setLocal(l => l.filter(h => h.id !== id));
-
-  const save_ = () => {
-    setHabits(local.filter(h => h.name.trim()));
-    onClose();
-  };
+  const save_ = () => { setHabits(local.filter(h => h.name.trim())); onClose(); };
 
   return (
     <div style={{
@@ -307,11 +446,8 @@ function SettingsView({ habits, setHabits, onClose }) {
             background: "#f0e8d8", border: "none", borderRadius: 12,
             width: 36, height: 36, cursor: "pointer", fontSize: 16, color: "#b09070"
           }}>←</button>
-          <h2 style={{ fontFamily: "'Georgia', serif", fontSize: 22, color: "#3d2c1e", fontWeight: "normal" }}>
-            My Habits
-          </h2>
+          <h2 style={{ fontFamily: "'Georgia', serif", fontSize: 22, color: "#3d2c1e", fontWeight: "normal" }}>My Habits</h2>
         </div>
-
         <div style={{
           background: "#fff", borderRadius: 16, padding: "14px 18px",
           border: "2px solid #f0e8d8", marginBottom: 20,
@@ -323,7 +459,6 @@ function SettingsView({ habits, setHabits, onClose }) {
             fontFamily: "'Georgia', serif"
           }}>{total}<span style={{ fontSize: 13, color: "#b09070" }}>/100</span></span>
         </div>
-
         {total !== 100 && (
           <div style={{
             background: total > 100 ? "#fef2f2" : "#fef9e7",
@@ -332,55 +467,28 @@ function SettingsView({ habits, setHabits, onClose }) {
             fontSize: 13, color: total > 100 ? "#dc2626" : "#92610a",
             fontFamily: "'Georgia', serif"
           }}>
-            {total > 100 ? `⚠️ ${total - 100} pts over limit — reduce some habits` : `💡 ${100 - total} pts remaining to assign`}
+            {total > 100 ? `⚠️ ${total - 100} pts over limit` : `💡 ${100 - total} pts remaining to assign`}
           </div>
         )}
-
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
           {local.map(h => (
             <div key={h.id} style={{
               background: "#fff", borderRadius: 16, padding: "12px 14px",
-              border: "2px solid #f0e8d8",
-              display: "flex", alignItems: "center", gap: 10
+              border: "2px solid #f0e8d8", display: "flex", alignItems: "center", gap: 10
             }}>
-              <input
-                value={h.emoji} onChange={e => update(h.id, "emoji", e.target.value)}
-                style={{
-                  width: 40, textAlign: "center", fontSize: 20,
-                  border: "none", background: "#f5ede0", borderRadius: 8,
-                  padding: "4px 0", cursor: "text"
-                }}
-              />
-              <input
-                value={h.name} onChange={e => update(h.id, "name", e.target.value)}
-                placeholder="Habit name..."
-                style={{
-                  flex: 1, border: "none", background: "transparent",
-                  fontFamily: "'Georgia', serif", fontSize: 14, color: "#3d2c1e",
-                  outline: "none"
-                }}
-              />
+              <input value={h.emoji} onChange={e => update(h.id, "emoji", e.target.value)}
+                style={{ width: 40, textAlign: "center", fontSize: 20, border: "none", background: "#f5ede0", borderRadius: 8, padding: "4px 0" }} />
+              <input value={h.name} onChange={e => update(h.id, "name", e.target.value)} placeholder="Habit name..."
+                style={{ flex: 1, border: "none", background: "transparent", fontFamily: "'Georgia', serif", fontSize: 14, color: "#3d2c1e", outline: "none" }} />
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <input
-                  type="number" min={1} max={100}
-                  value={h.points} onChange={e => update(h.id, "points", Number(e.target.value))}
-                  style={{
-                    width: 44, textAlign: "center",
-                    border: "2px solid #f0e8d8", borderRadius: 8,
-                    fontFamily: "'Georgia', serif", fontSize: 14, color: "#e8a000",
-                    padding: "4px 2px", background: "#fef9e7"
-                  }}
-                />
+                <input type="number" min={1} max={100} value={h.points} onChange={e => update(h.id, "points", Number(e.target.value))}
+                  style={{ width: 44, textAlign: "center", border: "2px solid #f0e8d8", borderRadius: 8, fontFamily: "'Georgia', serif", fontSize: 14, color: "#e8a000", padding: "4px 2px", background: "#fef9e7" }} />
                 <span style={{ fontSize: 11, color: "#c8a060" }}>pt</span>
               </div>
-              <button onClick={() => removeHabit(h.id)} style={{
-                background: "none", border: "none", cursor: "pointer",
-                fontSize: 16, color: "#fca5a5", padding: "0 2px"
-              }}>×</button>
+              <button onClick={() => removeHabit(h.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#fca5a5", padding: "0 2px" }}>×</button>
             </div>
           ))}
         </div>
-
         {local.length < 10 && (
           <button onClick={addHabit} style={{
             width: "100%", padding: "12px", borderRadius: 16,
@@ -389,7 +497,6 @@ function SettingsView({ habits, setHabits, onClose }) {
             cursor: "pointer", marginBottom: 20
           }}>+ Add habit ({local.length}/10)</button>
         )}
-
         <button onClick={save_} disabled={total !== 100} style={{
           width: "100%", padding: "16px", borderRadius: 16, border: "none",
           background: total === 100 ? "linear-gradient(135deg, #f9c846, #e08000)" : "#e5e7eb",
@@ -397,7 +504,6 @@ function SettingsView({ habits, setHabits, onClose }) {
           fontFamily: "'Georgia', serif", fontSize: 16,
           cursor: total === 100 ? "pointer" : "not-allowed",
           boxShadow: total === 100 ? "0 4px 16px rgba(249,200,70,0.4)" : "none",
-          transition: "all 0.2s"
         }}>
           {total === 100 ? "Save Habits ✓" : `Adjust to reach 100 pts (${total} now)`}
         </button>
@@ -406,13 +512,134 @@ function SettingsView({ habits, setHabits, onClose }) {
   );
 }
 
+// ─── Impressum Page ───────────────────────────────────────────────────────────
+function ImpressumPage({ onBack }) {
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(160deg, #fdf8f0 0%, #fef3dc 50%, #fdf0e0 100%)",
+      fontFamily: "'Georgia', serif",
+    }}>
+      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px 80px" }}>
+
+        {/* Top bar */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "28px 0 24px" }}>
+          <button onClick={onBack} style={{
+            background: "#fff", border: "2px solid #f0e8d8", borderRadius: 12,
+            width: 38, height: 38, cursor: "pointer", fontSize: 16, color: "#b09070",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+          }}>←</button>
+          <div>
+            <div style={{ fontSize: 10, letterSpacing: 4, color: "#c8a060", textTransform: "uppercase" }}>Legal</div>
+            <div style={{ fontSize: 20, color: "#3d2c1e" }}>Impressum</div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+          <ImpressumSection icon="🌿" title="Verantwortlich für den Inhalt">
+            <ImpLine>Timea Zelch</ImpLine>
+            <ImpLine>Lindenstr. 5</ImpLine>
+            <ImpLine>76327 Pfinztal</ImpLine>
+            <ImpLine>Deutschland</ImpLine>
+          </ImpressumSection>
+
+          <ImpressumSection icon="✉️" title="Kontakt">
+            <ImpLine>
+              <a href="mailto:hello@clarity-journal.com" style={{ color: "#c8a060", textDecoration: "none" }}>
+                hello@clarity-journal.com
+              </a>
+            </ImpLine>
+          </ImpressumSection>
+
+          <ImpressumSection icon="⚖️" title="Haftungsausschluss">
+            <ImpProse>
+              Die Inhalte dieser Website wurden mit grösster Sorgfalt erstellt.
+              Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte
+              kann jedoch keine Gewähr übernommen werden.
+            </ImpProse>
+          </ImpressumSection>
+
+          <ImpressumSection icon="©️" title="Urheberrecht">
+            <ImpProse>
+              Die durch die Seitenbetreiberin erstellten Inhalte und Werke auf dieser Website
+              unterliegen dem deutschen Urheberrecht. Die Vervielfältigung, Bearbeitung,
+              Verbreitung und jede Art der Verwertung ausserhalb der Grenzen des Urheberrechtes
+              bedürfen der schriftlichen Zustimmung der Autorin.
+            </ImpProse>
+          </ImpressumSection>
+
+          <ImpressumSection icon="🔒" title="Datenschutz">
+            <ImpProse>
+              Diese Website erhebt und speichert keine personenbezogenen Daten.
+              Alle Daten werden ausschliesslich lokal auf dem Gerät des Nutzers
+              gespeichert und nicht an Dritte weitergegeben.
+            </ImpProse>
+          </ImpressumSection>
+
+        </div>
+
+        <div style={{
+          marginTop: 32, paddingTop: 20,
+          borderTop: "2px solid #f0e8d8",
+          display: "flex", justifyContent: "space-between", alignItems: "center"
+        }}>
+          <div style={{ fontSize: 12, color: "#c8a060" }}>Stand: April 2026</div>
+          <div style={{ fontSize: 12, color: "#c8a060" }}>© The Clarity Journal</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImpressumSection({ icon, title, children }) {
+  return (
+    <div style={{
+      background: "#fff", borderRadius: 20, padding: "18px 20px",
+      border: "2px solid #f0e8d8", boxShadow: "0 2px 12px rgba(0,0,0,0.04)"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <div style={{ fontSize: 12, color: "#c8a060", letterSpacing: 2, textTransform: "uppercase" }}>{title}</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{children}</div>
+    </div>
+  );
+}
+
+function ImpLine({ children }) {
+  return <div style={{ fontSize: 14, color: "#3d2c1e", lineHeight: 1.6 }}>{children}</div>;
+}
+
+function ImpProse({ children }) {
+  return <div style={{ fontSize: 13, color: "#7a6a58", lineHeight: 1.75 }}>{children}</div>;
+}
+
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function ClarityDaily() {
+  const [currentUser, setCurrentUser] = useState(() => load("cd_current_user", null));
   const [habits, setHabits] = useState(() => load("cd_habits", DEFAULT_HABITS));
   const [dayData, setDayData] = useState(() => load("cd_daydata", {}));
-  const [view, setView] = useState("dashboard"); // dashboard | calendar | settings
+  const [view, setView] = useState("dashboard");
   const [showCalendar, setShowCalendar] = useState(false);
   const [floats, setFloats] = useState([]);
+
+  const handleLogin = (username) => {
+    save("cd_current_user", username);
+    setCurrentUser(username);
+    // Load user-specific data
+    const userHabits = load(`cd_habits_${username}`, DEFAULT_HABITS);
+    const userDayData = load(`cd_daydata_${username}`, {});
+    setHabits(userHabits);
+    setDayData(userDayData);
+  };
+
+  const handleLogout = () => {
+    save("cd_current_user", null);
+    setCurrentUser(null);
+    setView("dashboard");
+    setShowCalendar(false);
+  };
 
   const today = todayKey(new Date());
   const todayData = dayData[today] || {
@@ -422,14 +649,18 @@ export default function ClarityDaily() {
 
   const saveToday = (patch) => {
     const updated = { ...todayData, ...patch };
-    // recalc score
     const score = habits
       .filter(h => (updated.completed || []).includes(h.id))
       .reduce((s, h) => s + h.points, 0);
     updated.score = score;
     const newData = { ...dayData, [today]: updated };
     setDayData(newData);
-    save("cd_daydata", newData);
+    save(`cd_daydata_${currentUser}`, newData);
+  };
+
+  const saveHabits = (h) => {
+    setHabits(h);
+    save(`cd_habits_${currentUser}`, h);
   };
 
   const toggleHabit = (id) => {
@@ -439,7 +670,6 @@ export default function ClarityDaily() {
       ? todayData.completed.filter(x => x !== id)
       : [...(todayData.completed || []), id];
     saveToday({ completed });
-
     if (!was) {
       const fid = Date.now();
       setFloats(f => [...f, { id: fid, text: `+${habit.points}`, x: Math.random() * 50 + 25 }]);
@@ -449,11 +679,17 @@ export default function ClarityDaily() {
 
   const score = todayData.score || 0;
 
-  // persist habits
-  useEffect(() => { save("cd_habits", habits); }, [habits]);
+  // Show login screen if not logged in
+  if (!currentUser) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
 
   if (view === "settings") {
-    return <SettingsView habits={habits} setHabits={(h) => { setHabits(h); save("cd_habits", h); }} onClose={() => setView("dashboard")} />;
+    return <SettingsView habits={habits} setHabits={saveHabits} onClose={() => setView("dashboard")} />;
+  }
+
+  if (view === "impressum") {
+    return <ImpressumPage onBack={() => setView("dashboard")} />;
   }
 
   return (
@@ -478,7 +714,6 @@ export default function ClarityDaily() {
         input:focus, textarea:focus { outline: none; }
       `}</style>
 
-      {/* Floating points */}
       {floats.map(fl => (
         <div key={fl.id} style={{
           position: "fixed", top: "35%", left: `${fl.x}%`,
@@ -504,6 +739,10 @@ export default function ClarityDaily() {
             <div style={{ fontSize: 20, color: "#3d2c1e" }}>
               {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}
             </div>
+            {/* Username greeting */}
+            <div style={{ fontSize: 13, color: "#b09070", marginTop: 2 }}>
+              Welcome back, {currentUser} 🌿
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setShowCalendar(true)} style={{
@@ -515,15 +754,20 @@ export default function ClarityDaily() {
               background: "#fff", border: "2px solid #f0e8d8", borderRadius: 12,
               padding: "8px 12px", cursor: "pointer", fontSize: 16
             }}>⚙️</button>
+            {/* Logout */}
+            <button onClick={handleLogout} title="Sign out" style={{
+              background: "#fff", border: "2px solid #f0e8d8", borderRadius: 12,
+              padding: "8px 12px", cursor: "pointer", fontSize: 14,
+              color: "#c8a060", fontFamily: "'Georgia', serif"
+            }}>↩</button>
           </div>
         </div>
 
         <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 16, animation: "fadeIn 0.4s ease" }}>
 
-          {/* 🌱 Garden */}
           <Garden score={score} mood={todayData.mood} />
 
-          {/* 🌅 Intention */}
+          {/* Intention */}
           <div style={{
             background: "#fff", borderRadius: 20, padding: "18px 20px",
             border: "2px solid #f0e8d8", boxShadow: "0 2px 12px rgba(0,0,0,0.04)"
@@ -543,13 +787,12 @@ export default function ClarityDaily() {
               style={{
                 width: "100%", border: "2px solid #f0e8d8", borderRadius: 12,
                 padding: "12px 14px", fontFamily: "'Georgia', serif",
-                fontSize: 14, color: "#3d2c1e", background: "#fdf8f0",
-                lineHeight: 1.6
+                fontSize: 14, color: "#3d2c1e", background: "#fdf8f0", lineHeight: 1.6
               }}
             />
           </div>
 
-          {/* ✅ Habits */}
+          {/* Habits */}
           <div style={{
             background: "#fff", borderRadius: 20, padding: "18px 20px",
             border: "2px solid #f0e8d8", boxShadow: "0 2px 12px rgba(0,0,0,0.04)"
@@ -562,11 +805,8 @@ export default function ClarityDaily() {
                   <div style={{ fontSize: 16, color: "#3d2c1e" }}>Today's practices</div>
                 </div>
               </div>
-              <div style={{
-                fontSize: 20, color: "#e8a000", fontFamily: "'Georgia', serif"
-              }}>{score}<span style={{ fontSize: 12, color: "#c8a060" }}>pts</span></div>
+              <div style={{ fontSize: 20, color: "#e8a000" }}>{score}<span style={{ fontSize: 12, color: "#c8a060" }}>pts</span></div>
             </div>
-
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {habits.map(habit => {
                 const done = (todayData.completed || []).includes(habit.id);
@@ -581,11 +821,7 @@ export default function ClarityDaily() {
                   }}>
                     <span style={{ fontSize: 22 }}>{habit.emoji}</span>
                     <div style={{ flex: 1 }}>
-                      <div style={{
-                        fontSize: 14, color: done ? "#92610a" : "#3d2c1e",
-                        textDecoration: done ? "line-through" : "none",
-                        textDecorationColor: "#f9c846"
-                      }}>{habit.name}</div>
+                      <div style={{ fontSize: 14, color: done ? "#92610a" : "#3d2c1e", textDecoration: done ? "line-through" : "none", textDecorationColor: "#f9c846" }}>{habit.name}</div>
                       <div style={{ fontSize: 11, color: "#c8a060" }}>+{habit.points} pts</div>
                     </div>
                     <div style={{
@@ -601,7 +837,7 @@ export default function ClarityDaily() {
             </div>
           </div>
 
-          {/* 🌙 Evening */}
+          {/* Evening */}
           <div style={{
             background: "#fff", borderRadius: 20, padding: "18px 20px",
             border: "2px solid #f0e8d8", boxShadow: "0 2px 12px rgba(0,0,0,0.04)"
@@ -613,8 +849,6 @@ export default function ClarityDaily() {
                 <div style={{ fontSize: 16, color: "#3d2c1e" }}>Reflect & be grateful</div>
               </div>
             </div>
-
-            {/* Mood */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12, color: "#b09070", marginBottom: 8 }}>How did today feel?</div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -625,14 +859,10 @@ export default function ClarityDaily() {
                     cursor: "pointer", fontSize: 20,
                     boxShadow: todayData.mood === m.label ? `0 0 0 2px ${m.color}` : "none",
                     transition: "all 0.15s ease"
-                  }}>
-                    {m.emoji}
-                  </button>
+                  }}>{m.emoji}</button>
                 ))}
               </div>
             </div>
-
-            {/* Gratitude */}
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 12, color: "#b09070", marginBottom: 8 }}>2 things I'm grateful for</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -642,7 +872,7 @@ export default function ClarityDaily() {
                     <input
                       value={todayData[`grateful${n}`] || ""}
                       onChange={e => saveToday({ [`grateful${n}`]: e.target.value })}
-                      placeholder={`Grateful for...`}
+                      placeholder="Grateful for..."
                       style={{
                         flex: 1, border: "2px solid #f0e8d8", borderRadius: 10,
                         padding: "10px 12px", fontFamily: "'Georgia', serif",
@@ -653,8 +883,6 @@ export default function ClarityDaily() {
                 ))}
               </div>
             </div>
-
-            {/* Daily note */}
             <div>
               <div style={{ fontSize: 12, color: "#b09070", marginBottom: 8 }}>A note about today</div>
               <textarea
@@ -665,19 +893,15 @@ export default function ClarityDaily() {
                 style={{
                   width: "100%", border: "2px solid #f0e8d8", borderRadius: 12,
                   padding: "12px 14px", fontFamily: "'Georgia', serif",
-                  fontSize: 14, color: "#3d2c1e", background: "#fdf8f0",
-                  lineHeight: 1.6
+                  fontSize: 14, color: "#3d2c1e", background: "#fdf8f0", lineHeight: 1.6
                 }}
               />
             </div>
           </div>
 
-          {/* Score summary */}
           {score > 0 && (
             <div style={{
-              background: score >= 100
-                ? "linear-gradient(135deg, #fef3c7, #fde68a)"
-                : "linear-gradient(135deg, #f0fdf4, #dcfce7)",
+              background: score >= 100 ? "linear-gradient(135deg, #fef3c7, #fde68a)" : "linear-gradient(135deg, #f0fdf4, #dcfce7)",
               borderRadius: 20, padding: "18px 20px",
               border: `2px solid ${score >= 100 ? "#f9c846" : "#86efac"}`,
               textAlign: "center", animation: "fadeIn 0.4s ease"
@@ -689,6 +913,17 @@ export default function ClarityDaily() {
               <div style={{ fontSize: 12, color: "#b09070" }}>points earned today</div>
             </div>
           )}
+
+          {/* Impressum link */}
+          <div style={{ textAlign: "center", paddingTop: 8 }}>
+            <button onClick={() => setView("impressum")} style={{
+              background: "none", border: "none",
+              fontSize: 12, color: "#c8a060",
+              cursor: "pointer", fontFamily: "'Georgia', serif",
+              letterSpacing: 1, textDecoration: "underline",
+              textDecorationColor: "#e0d5c5"
+            }}>Impressum</button>
+          </div>
 
         </div>
       </div>
